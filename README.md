@@ -64,10 +64,10 @@ claims:
 Here, the token claims must **both** have the groups as before, **and** a `location` of `hq`.
 
 # NGINX Ingress Controller integration
-To use with the NGINX Ingress Controller, first create a deployment and a service for this endpoint. Then on the ingress object you wish to authenticate, add this annotation:
+To use with the NGINX Ingress Controller, first create a deployment and a service for this endpoint. See the [kubernetes/](kubernetes/) directory for example manifests. Then on the ingress object you wish to authenticate, add this annotation:
 
 ```yaml
-nginx.ingress.kubernetes.io/auth-url: http://nginx-jwt.default.svc.cluster.local:8080/validate
+nginx.ingress.kubernetes.io/auth-url: http://nginx-subrequest-auth-jwt.default.svc.cluster.local:8080/validate
 ```
 
 Change the url to match the name of the service and namespace you chose when deploying. All requests will now have their JWTs validated before getting passed to the upstream service.
