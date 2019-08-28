@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-subrequest-auth-jwt-config
+  labels:
+    app: nginx-subrequest-auth-jwt
+data:
+  config.yaml: |
+  	validationKeys:
+    - type: ecPublicKey
+      key: |
+        -----BEGIN PUBLIC KEY-----
+        MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEz/IVG9p2CIuCedjKaZhWO1v1weOK
+        MV6f9pNsZlDNhVKcsgJLR2ek0+FbfsvR6V8cK+4CMv6ffhhTI12QVtIGYA==
+        -----END PUBLIC KEY-----
+    claims:
+    - typ:
+      - device
+      - interactive_device
+

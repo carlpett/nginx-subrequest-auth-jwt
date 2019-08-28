@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-subrequest-auth-jwt
+  labels:
+    app: nginx-subrequest-auth-jwt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-subrequest-auth-jwt
+  template:
+    metadata:
+      labels:
+        app: nginx-subrequest-auth-jwt
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # https://github.com/GoogleContainerTools/distroless/blob/master/base/BUILD#L23
+        runAsUser: 65532
+      containers:
+      - name: nginx-subrequest-auth-jwt
+        image: gcr.io/syb-staging-platform/nginx-subrequest-auth-jwt:devel
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: sys
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: sys
+        resources:
+          requests:
+            cpu: 10m
+            memory: 30M
+        volumeMounts:
+        - name: config
+          mountPath: /config.yaml
+          subPath: config.yaml
+      volumes:
+      - name: config
+        configMap:
+          name: nginx-subrequest-auth-jwt-config
