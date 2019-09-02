@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/carlpett/nginx-subrequest-auth-jwt/logger"
@@ -29,6 +30,11 @@ var (
 	})
 )
 
+const (
+	claimsSourceStatic      = "static"
+	claimsSourceQueryString = "queryString"
+)
+
 func init() {
 	requestsTotal.WithLabelValues("200")
 	requestsTotal.WithLabelValues("401")
@@ -42,9 +48,10 @@ func init() {
 }
 
 type server struct {
-	PublicKey   *ecdsa.PublicKey
-	Logger      logger.Logger
-	ValidClaims []map[string][]string
+	PublicKey    *ecdsa.PublicKey
+	Logger       logger.Logger
+	ClaimsSource string
+	StaticClaims []map[string][]string
 }
 
 func newServer(logger logger.Logger) (*server, error) {
@@ -65,14 +72,19 @@ func newServer(logger logger.Logger) (*server, error) {
 		return nil, err
 	}
 
-	if len(config.Claims) == 0 {
+	if !contains([]string{"static", "queryString"}, config.ClaimsSource) {
+		return nil, fmt.Errorf("claimsSource parameter must be set and either 'static' or 'queryString'")
+	}
+
+	if config.ClaimsSource == claimsSourceStatic && len(config.StaticClaims) == 0 {
 		return nil, fmt.Errorf("Claims configuration is empty")
 	}
 
 	return &server{
-		PublicKey:   pubkey,
-		Logger:      logger,
-		ValidClaims: config.Claims,
+		PublicKey:    pubkey,
+		Logger:       logger,
+		ClaimsSource: config.ClaimsSource,
+		StaticClaims: config.StaticClaims,
 	}, nil
 }
 
@@ -83,7 +95,8 @@ type validationKey struct {
 
 type config struct {
 	ValidationKeys []validationKey       `yaml:"validationKeys"`
-	Claims         []map[string][]string `yaml:"claims"`
+	ClaimsSource   string                `yaml:"claimsSource"`
+	StaticClaims   []map[string][]string `yaml:"claims"`
 }
 
 func main() {
@@ -174,8 +187,20 @@ func (s *server) validateDeviceToken(r *http.Request) bool {
 		return false
 	}
 
+	switch s.ClaimsSource {
+	case claimsSourceStatic:
+		return s.staticClaimValidator(claims)
+	case claimsSourceQueryString:
+		return s.queryStringClaimValidator(claims, r)
+	default:
+		s.Logger.Errorw("Configuration error: Unhandled claims source", "claimsSource", s.ClaimsSource)
+		return false
+	}
+}
+
+func (s *server) staticClaimValidator(claims jwt.MapClaims) bool {
 	var valid bool
-	for _, claimSet := range s.ValidClaims {
+	for _, claimSet := range s.StaticClaims {
 		valid = true
 		for claimName, validValues := range claimSet {
 			if !contains(validValues, claims[claimName].(string)) {
@@ -186,12 +211,39 @@ func (s *server) validateDeviceToken(r *http.Request) bool {
 			break
 		}
 	}
+
 	if !valid {
-		s.Logger.Debugw("Token claims did not match required values", "validClaims", s.ValidClaims, "actualClaims", claims)
+		s.Logger.Debugw("Token claims did not match required values", "validClaims", s.StaticClaims, "actualClaims", claims)
+	}
+	return valid
+}
+
+func (s *server) queryStringClaimValidator(claims jwt.MapClaims, r *http.Request) bool {
+	validClaims := r.URL.Query()
+	hasClaimsPrefixedKey := false
+	for key := range validClaims {
+		if strings.HasPrefix(key, "claims_") {
+			hasClaimsPrefixedKey = true
+		}
+	}
+	if len(validClaims) == 0 || !hasClaimsPrefixedKey {
+		s.Logger.Warnw("No claims requirements sent, rejecting", "queryParams", validClaims)
 		return false
 	}
+	s.Logger.Debugw("Validating claims from query string", "validClaims", validClaims)
 
-	return true
+	passedValidation := true
+	for claimName, validValues := range validClaims {
+		actual, ok := claims[strings.TrimPrefix(claimName, "claims_")].(string)
+		if !ok || !contains(validValues, actual) {
+			passedValidation = false
+		}
+	}
+
+	if !passedValidation {
+		s.Logger.Debugw("Token claims did not match required values", "validClaims", validClaims, "actualClaims", claims)
+	}
+	return passedValidation
 }
 
 func contains(haystack []string, needle string) bool {
