@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/alecthomas/kingpin.v2"
 	"gopkg.in/yaml.v2"
 )
 
@@ -54,8 +54,8 @@ type server struct {
 	StaticClaims []map[string][]string
 }
 
-func newServer(logger logger.Logger) (*server, error) {
-	cfg, err := ioutil.ReadFile("config.yaml")
+func newServer(logger logger.Logger, configFilePath string) (*server, error) {
+	cfg, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -99,22 +99,45 @@ type config struct {
 	StaticClaims   []map[string][]string `yaml:"claims"`
 }
 
-func main() {
-	logger := logger.NewLogger(os.Getenv("LOG_LEVEL"))
+var (
+	configFilePath = kingpin.Flag("config", "Path to configuration file").Default("config.yaml").ExistingFile()
+	logLevel       = kingpin.Flag("log-level", "Log level").Default("info").Enum("debug", "info", "warn", "error", "fatal")
 
-	server, err := newServer(logger)
+	tlsKey   = kingpin.Flag("tls-key", "Path to TLS key").ExistingFile()
+	tlsCert  = kingpin.Flag("tls-cert", "Path to TLS cert").ExistingFile()
+	bindAddr = kingpin.Flag("addr", "Address/port to serve traffic in TLS mode").Default(":8443").String()
+
+	insecure         = kingpin.Flag("insecure", "Serve traffic unencrypted over http (default false)").Bool()
+	insecureBindAddr = kingpin.Flag("insecure-addr", "Address/port to serve traffic in insecure mode").Default(":8080").String()
+)
+
+func main() {
+	kingpin.HelpFlag.Short('h')
+	kingpin.Parse()
+
+	logger := logger.NewLogger(*logLevel)
+
+	server, err := newServer(logger, *configFilePath)
 	if err != nil {
 		logger.Fatalw("Couldn't initialize server", "err", err)
 	}
 
-	logger.Infow("Starting server on :8080")
-
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/validate", server.validate)
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "OK") })
-	err = http.ListenAndServe(":8080", nil)
+
+	if *insecure {
+		logger.Infow("Starting server", "addr", *insecureBindAddr)
+		err = http.ListenAndServe(*insecureBindAddr, nil)
+	} else {
+		logger.Infow("Starting server", "addr", *bindAddr)
+		if *tlsKey == "" || *tlsCert == "" {
+			logger.Fatalw("tls-key and tls-cert are required in TLS mode")
+		}
+		err = http.ListenAndServeTLS(*bindAddr, *tlsCert, *tlsKey, nil)
+	}
 	if err != nil {
-		logger.Fatalw("Error serving http", "err", err)
+		logger.Fatalw("Error running server", "err", err)
 	}
 }
 
