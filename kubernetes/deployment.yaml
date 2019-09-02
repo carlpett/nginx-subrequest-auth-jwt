@@ -23,7 +23,7 @@ spec:
         runAsUser: 65532
       containers:
       - name: nginx-subrequest-auth-jwt
-        image: gcr.io/syb-staging-platform/nginx-subrequest-auth-jwt:devel
+        image: carlpett/nginx-subrequest-auth-jwt:latest
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
