@@ -31,12 +31,12 @@ spec:
           protocol: TCP
         livenessProbe:
           httpGet:
-            path: /health
-            port: sys
+            path: /healthz
+            port: http
         readinessProbe:
           httpGet:
-            path: /health
-            port: sys
+            path: /healthz
+            port: http
         resources:
           requests:
             cpu: 10m
