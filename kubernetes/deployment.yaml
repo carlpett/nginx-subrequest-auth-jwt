@@ -24,6 +24,8 @@ spec:
       containers:
       - name: nginx-subrequest-auth-jwt
         image: carlpett/nginx-subrequest-auth-jwt:latest
+        args:
+          - --insecure
         imagePullPolicy: IfNotPresent
         ports:
         - name: http
