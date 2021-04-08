@@ -23,7 +23,10 @@ Flag     | Description | Default
 ## Configuration file
 The service takes a configuration file in YAML format, by default `config.yaml`. For example:
 
+TODO: update documentaion for `jwksUrl` validation keys are no longer needed and instead `jwksUrl` shoudl be used:
 ```yaml
+jwksUrl: https://<<insert_openid_connect_host>>/.well-known/openid-configuration/jwks
+#No longer working
 validationKeys:
   - type: ecPublicKey
     key: |

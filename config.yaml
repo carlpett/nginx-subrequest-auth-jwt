@@ -1,0 +1,7 @@
+jwksUrl: https://<<insert_openid_connect_host>>/.well-known/openid-configuration/jwks
+claimsSource: queryString
+# claims:
+# - groups:
+#   - developers
+#   - administrators
+
